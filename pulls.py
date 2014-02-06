@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import argparse
 import operator
 import sys
@@ -29,9 +30,15 @@ def show_pulls(jrep, label=None, comments=False):
 
 def main(argv):
     parser = argparse.ArgumentParser(description="Summarize pull requests.")
-    parser.add_argument("-a", "--all", action='store_true')
-    parser.add_argument("-c", "--comments", action='store_true')
-    parser.add_argument("--debug")
+    parser.add_argument("-a", "--all", action='store_true',
+        help="Show all open pull requests, else only open-source",
+        )
+    parser.add_argument("-c", "--comments", action='store_true',
+        help="Also show 5 most recent comments",
+        )
+    parser.add_argument("--debug",
+        help="See what's going on.  DEBUG=http or json are fun.",
+        )
 
     args = parser.parse_args(argv[1:])
 
