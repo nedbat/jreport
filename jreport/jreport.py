@@ -23,6 +23,10 @@ class JObj(object):
             val = val[k]
         return val
 
+    def __setitem__(self, key, value):
+        assert "." not in key
+        self.obj[key] = value
+
     def format(self, fmt):
         return string.Formatter().vformat(fmt, (), JFormatObj(self.obj))
 
@@ -69,7 +73,7 @@ class Formattable(object):
                 if spec.startswith("%"):
                     v = format(dateutil.parser.parse(v), spec)
                 elif spec in colors.COLORS:
-                    v = colors.color(v, fg=spec)
+                    v = colors.color(str(v), fg=spec)
                 elif spec in colors.STYLES:
                     v = colors.color(v, style=spec)
                 elif spec == "ago":

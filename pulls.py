@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 import argparse
 import datetime
+import itertools
 import operator
 import sys
 
+import yaml
+
 import jreport
 
-ISSUE_FMT = "{number:5d:white:bold} {user.login:>17s:cyan} {comments:3d:red}  {title:.100s}  - {state:white:negative} {updated_at:ago:white} {created_at:%b %d:yellow}"
+ISSUE_FMT = "{number:5d:white:bold} {user.login:>17s:cyan} {comments:3d:red}  {title:.100s} {pull.commits}c{pull.changed_files}f {pull.additions:green}+{pull.deletions:red}- {state:white:negative} {updated_at:ago:white} {created_at:%b %d:yellow}"
 COMMENT_FMT = "{:31}{user.login:cyan} {created_at:%b %d:yellow}  \t{body:oneline:.100s:white}"
 
 def get_pulls(jrep, params):
@@ -16,7 +19,7 @@ def get_pulls(jrep, params):
     return issues
 
 
-def show_pulls(jrep, label=None, comments=False, states=None, since=None):
+def show_pulls(jrep, label=None, comments=False, states=None, since=None, org=False):
     params = {}
     if label:
         params['labels'] = label
@@ -28,16 +31,37 @@ def show_pulls(jrep, label=None, comments=False, states=None, since=None):
         params['state'] = state
         issues.extend(get_pulls(jrep, params))
 
-    issues = sorted(issues, key=operator.itemgetter("updated_at"))
+    try:
+        with open("mapping.yaml") as fmapping:
+            user_mapping = yaml.load(fmapping)
+        def_org = "other"
+    except IOError:
+        user_mapping = {}
+        def_org = "---"
+
+    num_issues = len(issues)
 
     for issue in issues:
-        print issue.format(ISSUE_FMT)
-        if comments:
-            comms = jrep.get_json_array(issue['comments_url'])
-            for comment in comms[-5:]:
-                print comment.format(COMMENT_FMT)
+        issue['org'] = user_mapping.get(issue["user.login"], {}).get("institution", def_org)
+        issue['pull'] = jrep.get_json_object("https://api.github.com/repos/edx/edx-platform/pulls/{}".format(issue["number"]))
 
-    print "\n{} pull requests".format(len(issues))
+    if org:
+        issues = sorted(issues, key=operator.itemgetter("org"))
+        grouped = itertools.groupby(issues, key=operator.itemgetter("org"))
+    else:
+        issues = sorted(issues, key=operator.itemgetter("updated_at"))
+        grouped = [("all", issues)]
+
+    for category, issues in grouped:
+        print "-- {} ----".format(category)
+        for issue in issues:
+            print issue.format(ISSUE_FMT)
+            if comments:
+                comms = jrep.get_json_array(issue['comments_url'])
+                for comment in comms[-5:]:
+                    print comment.format(COMMENT_FMT)
+
+    print "\n{} pull requests".format(num_issues)
 
 
 def main(argv):
@@ -53,6 +77,9 @@ def main(argv):
         )
     parser.add_argument("--debug",
         help="See what's going on.  DEBUG=http or json are fun.",
+        )
+    parser.add_argument("--org", action='store_true',
+        help="Include and sort by affiliation",
         )
     parser.add_argument("--since", metavar="DAYS", type=int,
         help="Include pull requests active in the last DAYS days.",
@@ -73,7 +100,14 @@ def main(argv):
         since = datetime.datetime.now() - datetime.timedelta(days=args.since)
 
     jrep = jreport.JReport(debug=args.debug)
-    show_pulls(jrep, label=label, comments=args.comments, states=states, since=since)
+    show_pulls(
+        jrep,
+        label=label,
+        comments=args.comments,
+        states=states,
+        since=since,
+        org=args.org,
+    )
 
 
 if __name__ == "__main__":
