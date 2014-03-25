@@ -160,7 +160,10 @@ class JReport(object):
         jlist = []
         for page_num in itertools.count(start=1):
             page_url = url.set_query_params(per_page=str(page_size), page=str(page_num))
-            result = requests.get(page_url, auth=auth).json()
+            resp = requests.get(page_url, auth=auth)
+            result = resp.json()
+            if not resp.ok:
+                raise requests.exceptions.RequestException(result["message"])
             if "json" in self.debug:
                 pprint.pprint(result)
             if result:
