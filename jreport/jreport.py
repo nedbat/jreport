@@ -17,6 +17,11 @@ class JObj(object):
     def __init__(self, obj):
         self.obj = obj
 
+    def __repr__(self):
+        return u"jreport.{cls}({obj!r})".format(
+            cls=self.__class__.__name__, obj=self.obj,
+        )
+
     def __getitem__(self, key):
         val = self.obj
         for k in key.split("."):
@@ -38,6 +43,11 @@ class JFormatObj(object):
     def __init__(self, obj):
         self.obj = obj
 
+    def __repr__(self):
+        return u"jreport.{cls}({obj!r})".format(
+            cls=self.__class__.__name__, obj=self.obj,
+        )
+
     def __getitem__(self, key):
         if key == "":
             return ""
@@ -50,6 +60,11 @@ class JFormatObj(object):
 class Formattable(object):
     def __init__(self, v):
         self.v = v
+
+    def __repr__(self):
+        return u"jreport.{cls}({v!r})".format(
+            cls=self.__class__.__name__, v=self.v,
+        )
 
     def __eq__(self, other):
         return self.v == other.v
@@ -128,6 +143,11 @@ class JReport(object):
             # Yuck, but this is what requests says to do.
             import httplib
             httplib.HTTPConnection.debuglevel = 1
+
+    def __repr__(self):
+        return u"jreport.{cls}({debug!r})".format(
+            cls=self.__class__.__name__, debug=self.debug,
+        )
 
     def _prep(self, url, auth, params):
         url = URLObject(url).set_query_params(params or {})
