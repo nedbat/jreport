@@ -5,6 +5,7 @@ import pprint
 import string
 import urllib
 import urlparse
+import re
 
 import colors
 import dateutil.parser
@@ -126,6 +127,28 @@ def ago(v, detail=2, brief=True):
     return " ".join(chunks[:detail])
 
 
+def paginated_get(url, debug="", **kwargs):
+    """
+    Returns a generator that will retrieve all objects from a paginated API.
+    Assumes that the pagination is specified in the "link" header, like
+    Github's v3 API.
+    """
+    while url:
+        resp = requests.get(url, **kwargs)
+        result = resp.json()
+        if not resp.ok:
+            raise requests.exceptions.RequestException(result["message"])
+        if "json" in debug:
+            pprint.pprint(result)
+        for item in result:
+            yield item
+        url = None
+        if "link" in resp.headers:
+            match = re.search(r'<(?P<url>[^>]+)>; rel="next"', resp.headers["link"])
+            if match:
+                url = match.group('url')
+
+
 class JReport(object):
     def __init__(self, debug=""):
         # If there's an auth.yaml, use it!
@@ -155,22 +178,9 @@ class JReport(object):
             auth = tuple(self.auth.get(url.hostname, {}).get("auth", ()))
         return url, auth
 
-    def get_json_array(self, url, auth=None, params=None, page_size=50):
+    def get_json_array(self, url, auth=None, params=None):
         url, auth = self._prep(url, auth, params)
-        jlist = []
-        for page_num in itertools.count(start=1):
-            page_url = url.set_query_params(per_page=str(page_size), page=str(page_num))
-            resp = requests.get(page_url, auth=auth)
-            result = resp.json()
-            if not resp.ok:
-                raise requests.exceptions.RequestException(result["message"])
-            if "json" in self.debug:
-                pprint.pprint(result)
-            if result:
-                jlist.extend(result)
-            if len(result) < page_size:
-                break
-        return map(JObj, jlist)
+        return [JObj(item) for item in paginated_get(url, debug=self.debug, auth=auth)]
 
     def get_json_object(self, url, auth=None, params=None):
         url, auth = self._prep(url, auth, params)
