@@ -33,6 +33,12 @@ class JObj(object):
         assert "." not in key
         self.obj[key] = value
 
+    def get(self, *args, **kwargs):
+        return self.obj.get(*args, **kwargs)
+
+    def __contains__(self, item):
+        return item in self.obj
+
     def format(self, fmt):
         return string.Formatter().vformat(fmt, (), JFormatObj(self.obj))
 
@@ -89,7 +95,7 @@ class Formattable(object):
                 if spec.startswith("%"):
                     v = format(dateutil.parser.parse(v), spec)
                 elif spec in colors.COLORS:
-                    v = colors.color(str(v), fg=spec)
+                    v = colors.color(unicode(v), fg=spec)
                 elif spec in colors.STYLES:
                     v = colors.color(v, style=spec)
                 elif spec == "ago":
@@ -141,7 +147,7 @@ def paginated_get(url, debug="", **kwargs):
         if "json" in debug:
             pprint.pprint(result)
         for item in result:
-            yield item
+            yield JObj(item)
         url = None
         if "link" in resp.headers:
             match = re.search(r'<(?P<url>[^>]+)>; rel="next"', resp.headers["link"])
