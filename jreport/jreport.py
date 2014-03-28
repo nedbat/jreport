@@ -1,17 +1,14 @@
 import datetime
 import functools
-import itertools
 import pprint
 import string
-import urllib
-import urlparse
-import re
 
 import colors
 import dateutil.parser
 import requests
 from urlobject import URLObject
 import yaml
+from .util import paginated_get
 
 
 class JObj(object):
@@ -133,28 +130,6 @@ def ago(v, detail=2, brief=True):
     return " ".join(chunks[:detail])
 
 
-def paginated_get(url, debug="", **kwargs):
-    """
-    Returns a generator that will retrieve all objects from a paginated API.
-    Assumes that the pagination is specified in the "link" header, like
-    Github's v3 API.
-    """
-    while url:
-        resp = requests.get(url, **kwargs)
-        result = resp.json()
-        if not resp.ok:
-            raise requests.exceptions.RequestException(result["message"])
-        if "json" in debug:
-            pprint.pprint(result)
-        for item in result:
-            yield JObj(item)
-        url = None
-        if "link" in resp.headers:
-            match = re.search(r'<(?P<url>[^>]+)>; rel="next"', resp.headers["link"])
-            if match:
-                url = match.group('url')
-
-
 class JReport(object):
     def __init__(self, debug=""):
         # If there's an auth.yaml, use it!
@@ -186,7 +161,8 @@ class JReport(object):
 
     def get_json_array(self, url, auth=None, params=None):
         url, auth = self._prep(url, auth, params)
-        return [JObj(item) for item in paginated_get(url, debug=self.debug, auth=auth)]
+        debug = ("json" in self.debug)
+        return [JObj(item) for item in paginated_get(url, debug=debug, auth=auth)]
 
     def get_json_object(self, url, auth=None, params=None):
         url, auth = self._prep(url, auth, params)
