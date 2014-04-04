@@ -23,7 +23,7 @@ def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None,
 
     url = URLObject("https://api.github.com/repos/edx/edx-platform/issues")
     if labels:
-        url = url.set_query_param('label', ",".join(labels))
+        url = url.set_query_param('labels', ",".join(labels))
     if since:
         url = url.set_query_param('since', since.isoformat())
     if state:
@@ -76,7 +76,7 @@ def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None,
 
 def main(argv):
     parser = argparse.ArgumentParser(description="Summarize pull requests.")
-    parser.add_argument("-a", "--all", action='store_true',
+    parser.add_argument("-a", "--all-labels", action='store_true',
         help="Show all open pull requests, else only open-source",
         )
     parser.add_argument("--closed", action='store_true',
@@ -98,7 +98,7 @@ def main(argv):
     args = parser.parse_args(argv[1:])
 
     labels = []
-    if not args.all:
+    if not args.all_labels:
         labels.append("open-source-contribution")
 
     if args.closed:
