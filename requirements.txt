@@ -1,5 +1,7 @@
 ansicolors
+iso8601
 requests
 python-dateutil
 PyYAML
 URLObject
+more_itertools

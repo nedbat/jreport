@@ -1,21 +1,24 @@
 import datetime
 import functools
-import itertools
 import pprint
 import string
-import urllib
-import urlparse
 
 import colors
 import dateutil.parser
 import requests
 from urlobject import URLObject
 import yaml
+from .util import paginated_get
 
 
 class JObj(object):
     def __init__(self, obj):
         self.obj = obj
+
+    def __repr__(self):
+        return u"jreport.{cls}({obj!r})".format(
+            cls=self.__class__.__name__, obj=self.obj,
+        )
 
     def __getitem__(self, key):
         val = self.obj
@@ -27,6 +30,12 @@ class JObj(object):
         assert "." not in key
         self.obj[key] = value
 
+    def get(self, *args, **kwargs):
+        return self.obj.get(*args, **kwargs)
+
+    def __contains__(self, item):
+        return item in self.obj
+
     def format(self, fmt):
         return string.Formatter().vformat(fmt, (), JFormatObj(self.obj))
 
@@ -37,6 +46,11 @@ class JObj(object):
 class JFormatObj(object):
     def __init__(self, obj):
         self.obj = obj
+
+    def __repr__(self):
+        return u"jreport.{cls}({obj!r})".format(
+            cls=self.__class__.__name__, obj=self.obj,
+        )
 
     def __getitem__(self, key):
         if key == "":
@@ -50,6 +64,11 @@ class JFormatObj(object):
 class Formattable(object):
     def __init__(self, v):
         self.v = v
+
+    def __repr__(self):
+        return u"jreport.{cls}({v!r})".format(
+            cls=self.__class__.__name__, v=self.v,
+        )
 
     def __eq__(self, other):
         return self.v == other.v
@@ -73,7 +92,7 @@ class Formattable(object):
                 if spec.startswith("%"):
                     v = format(dateutil.parser.parse(v), spec)
                 elif spec in colors.COLORS:
-                    v = colors.color(str(v), fg=spec)
+                    v = colors.color(unicode(v), fg=spec)
                 elif spec in colors.STYLES:
                     v = colors.color(v, style=spec)
                 elif spec == "ago":
@@ -129,25 +148,21 @@ class JReport(object):
             import httplib
             httplib.HTTPConnection.debuglevel = 1
 
+    def __repr__(self):
+        return u"jreport.{cls}({debug!r})".format(
+            cls=self.__class__.__name__, debug=self.debug,
+        )
+
     def _prep(self, url, auth, params):
         url = URLObject(url).set_query_params(params or {})
         if not auth:
             auth = tuple(self.auth.get(url.hostname, {}).get("auth", ()))
         return url, auth
 
-    def get_json_array(self, url, auth=None, params=None, page_size=50):
+    def get_json_array(self, url, auth=None, params=None):
         url, auth = self._prep(url, auth, params)
-        jlist = []
-        for page_num in itertools.count(start=1):
-            page_url = url.set_query_params(per_page=str(page_size), page=str(page_num))
-            result = requests.get(page_url, auth=auth).json()
-            if "json" in self.debug:
-                pprint.pprint(result)
-            if result:
-                jlist.extend(result)
-            if len(result) < page_size:
-                break
-        return map(JObj, jlist)
+        debug = ("json" in self.debug)
+        return [JObj(item) for item in paginated_get(url, debug=debug, auth=auth)]
 
     def get_json_object(self, url, auth=None, params=None):
         url, auth = self._prep(url, auth, params)

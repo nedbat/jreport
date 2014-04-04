@@ -1,35 +1,34 @@
 #!/usr/bin/env python
+from __future__ import print_function
+
 import argparse
 import datetime
-import itertools
+import more_itertools
 import operator
 import sys
 
+from urlobject import URLObject
 import yaml
+import requests
 
 import jreport
+from jreport.util import paginated_get
 
 ISSUE_FMT = "{number:5d:white:bold} {user.login:>17s:cyan} {comments:3d:red}  {title:.100s} {pull.commits}c{pull.changed_files}f {pull.additions:green}+{pull.deletions:red}- {state:white:negative} {updated_at:ago:white} {created_at:%b %d:yellow}"
 COMMENT_FMT = "{:31}{user.login:cyan} {created_at:%b %d:yellow}  \t{body:oneline:.100s:white}"
 
-def get_pulls(jrep, params):
-    url = "https://api.github.com/repos/edx/edx-platform/issues"
-    issues = jrep.get_json_array(url, params=params)
-    issues = [iss for iss in issues if iss['pull_request.html_url']]
-    return issues
 
+def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None, org=False):
+    labels = labels or []
 
-def show_pulls(jrep, label=None, comments=False, states=None, since=None, org=False):
-    params = {}
-    if label:
-        params['labels'] = label
+    url = URLObject("https://api.github.com/repos/edx/edx-platform/issues")
+    if labels:
+        url = url.set_query_param('labels', ",".join(labels))
     if since:
-        params['since'] = since.isoformat()
-
-    issues = []
-    for state in (states or ["open"]):
-        params['state'] = state
-        issues.extend(get_pulls(jrep, params))
+        url = url.set_query_param('since', since.isoformat())
+    if state:
+        url = url.set_query_param('state', state)
+    url = url.set_query_param('sort', 'updated')
 
     try:
         with open("mapping.yaml") as fmapping:
@@ -39,40 +38,51 @@ def show_pulls(jrep, label=None, comments=False, states=None, since=None, org=Fa
         user_mapping = {}
         def_org = "---"
 
-    num_issues = len(issues)
-
-    for issue in issues:
-        issue['org'] = user_mapping.get(issue["user.login"], {}).get("institution", def_org)
-        issue['pull'] = jrep.get_json_object("https://api.github.com/repos/edx/edx-platform/pulls/{}".format(issue["number"]))
-
+    issues = (jreport.JObj(issue) for issue in paginated_get(url))
     if org:
-        issues = sorted(issues, key=operator.itemgetter("org"))
-        grouped = itertools.groupby(issues, key=operator.itemgetter("org"))
-    else:
-        issues = sorted(issues, key=operator.itemgetter("updated_at"))
-        grouped = [("all", issues)]
-
-    for category, issues in grouped:
-        print "-- {} ----".format(category)
+        # exhaust the generator
+        issues = list(issues)
+        # look up each user's organization
         for issue in issues:
-            print issue.format(ISSUE_FMT)
-            if comments:
-                comms = jrep.get_json_array(issue['comments_url'])
-                for comment in comms[-5:]:
-                    print comment.format(COMMENT_FMT)
+            issue['org'] = user_mapping.get(issue["user.login"], {}).get("institution", def_org)
+        # re-sort issues based on user organizations
+        issues = sorted(issues, key=operator.itemgetter("org"))
 
-    print "\n{} pull requests".format(num_issues)
+    category = None
+    for index, issue in enumerate(issues):
+        pr_url = issue['pull_request']['url']
+        if pr_url:
+            issue['pull'] = requests.get(pr_url).json()
+        else:
+            issue['pull'] = {'commits': 0, 'changed_files': 0, 'additions': 0, 'deletions': 0}
+        if issue.get("org") != category:
+            # new category! print category header
+            category = issue["org"]
+            print("-- {category} ----".format(category=category))
+        print(issue.format(ISSUE_FMT))
+        if show_comments:
+            comments_url = URLObject(issue['comments_url'])
+            comments_url = comments_url.set_query_param("sort", "created")
+            comments_url = comments_url.set_query_param("direction", "desc")
+            comments = paginated_get(comments_url)
+            last_five_comments = reversed(more_itertools.take(5, comments))
+            for comment in last_five_comments:
+                print(comment.format(COMMENT_FMT))
+
+    # index is now set to the total number of pull requests
+    print()
+    print("{num} pull requests".format(num=index))
 
 
 def main(argv):
     parser = argparse.ArgumentParser(description="Summarize pull requests.")
-    parser.add_argument("-a", "--all", action='store_true',
+    parser.add_argument("-a", "--all-labels", action='store_true',
         help="Show all open pull requests, else only open-source",
         )
     parser.add_argument("--closed", action='store_true',
         help="Include closed pull requests",
         )
-    parser.add_argument("--comments", action='store_true',
+    parser.add_argument("--comments", dest="show_comments", action='store_true',
         help="Also show 5 most recent comments",
         )
     parser.add_argument("--debug",
@@ -87,13 +97,14 @@ def main(argv):
 
     args = parser.parse_args(argv[1:])
 
-    label = None
-    if not args.all:
-        label = "open-source-contribution"
+    labels = []
+    if not args.all_labels:
+        labels.append("open-source-contribution")
 
-    states = ["open"]
     if args.closed:
-        states.append("closed")
+        state = "all"
+    else:
+        state = "open"
 
     since = None
     if args.since:
@@ -102,9 +113,9 @@ def main(argv):
     jrep = jreport.JReport(debug=args.debug)
     show_pulls(
         jrep,
-        label=label,
-        comments=args.comments,
-        states=states,
+        labels=labels,
+        show_comments=args.show_comments,
+        state=state,
         since=since,
         org=args.org,
     )
