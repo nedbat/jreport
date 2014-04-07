@@ -4,7 +4,7 @@ from __future__ import print_function
 import sys
 import argparse
 import itertools
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from backports import statistics
 
 import iso8601
@@ -127,9 +127,7 @@ def main(argv):
 
     since = None
     if args.since:
-        since = datetime.now() - timedelta(days=args.since)
-        # make it a date, not a datetime
-        since = since.date()
+        since = date.today() - timedelta(days=args.since)
 
     internal_usernames = get_internal_usernames()
 
