@@ -19,10 +19,31 @@ REPOS = (
     ("edx", "edx-platform", "open-source-contribution"),
     ("edx", "configuration", "open-source-contribution"),
 )
+INTERNAL_TEAMS = ("developers", "contractors")
+
+
+def get_internal_usernames():
+    """
+    Returns a set of the Github usernames that are in at least one of the
+    internal teams at edX.
+    """
+    internal_usernames = set()
+    teams_url = "https://api.github.com/orgs/edx/teams"
+    members_urls = {team["name"]: team["members_url"].replace("{/member}", "")
+                    for team in paginated_get(teams_url)}
+    for team in INTERNAL_TEAMS:
+        if team not in members_urls:
+            print("Warning: {team} not present on Github".format(team=team),
+                  file=sys.stderr)
+            continue
+        members = paginated_get(members_urls[team])
+        for member in members:
+            internal_usernames.add(member["login"])
+    return internal_usernames
 
 
 def get_duration_data(owner="edx", repo="edx-platform", since=None,
-                      external_label="open-source-contribution"):
+                      external_label="open-source-contribution", internal_usernames=None):
     """
     Return four lists of data, where each list contains only timedelta objects:
       age of internal open pull requests (all)
@@ -33,6 +54,8 @@ def get_duration_data(owner="edx", repo="edx-platform", since=None,
     These lists are organized into an object that categorizes the lists
     by position and state.
     """
+    internal_usernames = internal_usernames or set()
+
     url = URLObject("https://api.github.com/repos/{owner}/{repo}/issues".format(
                     owner=owner, repo=repo))
     # two separate URLs, one for open PRs, the other for closed PRs
@@ -67,10 +90,13 @@ def get_duration_data(owner="edx", repo="edx-platform", since=None,
 
         label_names = [label["name"] for label in issue["labels"]]
 
-        if external_label in label_names:
+        if external_label and external_label in label_names:
             position = "external"
         else:
-            position = "internal"
+            if issue["user"]["login"] in internal_usernames:
+                position = "internal"
+            else:
+                position = "external"
 
         created_at = iso8601.parse_date(issue["created_at"]).replace(tzinfo=None)
         if state == "open":
@@ -105,6 +131,8 @@ def main(argv):
         # make it a date, not a datetime
         since = since.date()
 
+    internal_usernames = get_internal_usernames()
+
     durations = {
         "open": {
             "internal": [],
@@ -116,7 +144,7 @@ def main(argv):
         }
     }
     for owner, repo, label in REPOS:
-        repo_durations = get_duration_data(owner, repo, since, label)
+        repo_durations = get_duration_data(owner, repo, since, label, internal_usernames)
         for state in ("open", "closed"):
             for position in ("external", "internal"):
                 durations[state][position].extend(repo_durations[state][position])
