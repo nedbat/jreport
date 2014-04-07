@@ -14,8 +14,15 @@ from jreport.util import paginated_get
 
 DEBUG = False
 
+REPOS = (
+    # owner, repo, label to indicate external contribution
+    ("edx", "edx-platform", "open-source-contribution"),
+    ("edx", "configuration", "open-source-contribution"),
+)
 
-def get_duration_data(since=None, external_label="open-source-contribution"):
+
+def get_duration_data(owner="edx", repo="edx-platform", since=None,
+                      external_label="open-source-contribution"):
     """
     Return four lists of data, where each list contains only timedelta objects:
       age of internal open pull requests (all)
@@ -26,7 +33,8 @@ def get_duration_data(since=None, external_label="open-source-contribution"):
     These lists are organized into an object that categorizes the lists
     by position and state.
     """
-    url = URLObject("https://api.github.com/repos/edx/edx-platform/issues")
+    url = URLObject("https://api.github.com/repos/{owner}/{repo}/issues".format(
+                    owner=owner, repo=repo))
     # two separate URLs, one for open PRs, the other for closed PRs
     open_url = url.set_query_param("state", "open")
     closed_url = url.set_query_param("state", "closed")
@@ -71,8 +79,9 @@ def get_duration_data(since=None, external_label="open-source-contribution"):
             closed_at = iso8601.parse_date(issue["closed_at"]).replace(tzinfo=None)
         duration = closed_at - created_at
         if DEBUG:
-            print("{num}: {position} {state}".format(
-                num=issue["number"], position=position, state=state
+            print("{owner}/{repo}#{num}: {position} {state}".format(
+                owner=owner, repo=repo, num=issue["number"],
+                position=position, state=state
             ), file=sys.stderr)
 
         durations[state][position].append(duration)
@@ -85,9 +94,6 @@ def main(argv):
     parser.add_argument("--since", metavar="DAYS", type=int, default=14,
         help="For closed issues, only include issues updated in the past DAYS days [%(default)d]"
     )
-    parser.add_argument('--open-source-label', default='open-source-contribution',
-        help="The label that marks a pull request as external [%(default)s]"
-    )
     args = parser.parse_args(argv[1:])
 
     since = None
@@ -96,7 +102,21 @@ def main(argv):
         # make it a date, not a datetime
         since = since.date()
 
-    durations = get_duration_data(since, args.open_source_label)
+    durations = {
+        "open": {
+            "internal": [],
+            "external": [],
+        },
+        "closed": {
+            "internal": [],
+            "external": [],
+        }
+    }
+    for owner, repo, label in REPOS:
+        repo_durations = get_duration_data(owner, repo, since, label)
+        for state in ("open", "closed"):
+            for position in ("external", "internal"):
+                durations[state][position].extend(repo_durations[state][position])
 
     for state in ("open", "closed"):
         for position in ("external", "internal"):
