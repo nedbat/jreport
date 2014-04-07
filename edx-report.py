@@ -94,6 +94,9 @@ def main(argv):
     parser.add_argument("--since", metavar="DAYS", type=int, default=14,
         help="For closed issues, only include issues updated in the past DAYS days [%(default)d]"
     )
+    parser.add_argument("--human", action="store_true",
+        help="Human-readable output"
+    )
     args = parser.parse_args(argv[1:])
 
     since = None
@@ -121,16 +124,21 @@ def main(argv):
     for state in ("open", "closed"):
         for position in ("external", "internal"):
             seconds = [d.total_seconds() for d in durations[state][position]]
-            median_seconds = round(statistics.median(seconds))
+            median_seconds = int(statistics.median(seconds))
             median_duration = timedelta(seconds=median_seconds)
             if state == "open":
                 population = "all"
             elif since:
                 population = "since {date}".format(date=since)
-            print("median {position} {state} ({population}): {duration}".format(
-                position=position, state=state, population=population,
-                duration=median_duration
-            ))
+            if args.human:
+                print("median {position} {state} ({population}): {duration}".format(
+                    position=position, state=state, population=population,
+                    duration=median_duration
+                ))
+            else:
+                print("median {position} {state} {seconds}".format(
+                    position=position, state=state, seconds=median_seconds
+                ))
 
 if __name__ == "__main__":
     main(sys.argv)
