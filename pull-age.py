@@ -126,9 +126,8 @@ def main(argv):
             seconds = [d.total_seconds() for d in durations[state][position]]
             median_seconds = int(statistics.median(seconds))
             median_duration = timedelta(seconds=median_seconds)
-            if state == "open":
-                population = "all"
-            elif since:
+            population = "all"
+            if state == "closed" and since:
                 population = "since {date}".format(date=since)
             if args.human:
                 print("median {position} {state} ({population}): {duration}".format(
