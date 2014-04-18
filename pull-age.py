@@ -150,8 +150,12 @@ def main(argv):
     for state in ("open", "closed"):
         for position in ("external", "internal"):
             seconds = [d.total_seconds() for d in durations[state][position]]
-            median_seconds = int(statistics.median(seconds))
-            median_duration = timedelta(seconds=median_seconds)
+            if seconds:
+                median_seconds = int(statistics.median(seconds))
+                median_duration = timedelta(seconds=median_seconds)
+            else:
+                median_seconds = -1
+                median_duration = "no data"
             population = "all"
             if state == "closed" and since:
                 population = "since {date}".format(date=since)
