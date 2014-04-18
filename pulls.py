@@ -50,11 +50,11 @@ def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None,
 
     category = None
     for index, issue in enumerate(issues):
-        pr_url = issue['pull_request']['url']
-        if pr_url:
-            issue['pull'] = requests.get(pr_url).json()
-        else:
-            issue['pull'] = {'commits': 0, 'changed_files': 0, 'additions': 0, 'deletions': 0}
+        pr_url = issue.get('pull_request', {}).get('url')
+        if not pr_url:
+            # We only want pull requests.
+            continue
+        issue['pull'] = requests.get(pr_url).json()
         if issue.get("org") != category:
             # new category! print category header
             category = issue["org"]
