@@ -85,7 +85,7 @@ def get_duration_data(owner="edx", repo="edx-platform", since=None,
     )
 
     for issue, state in itertools.chain(open_issues_generator, closed_issues_generator):
-        if not issue['pull_request']['url']:
+        if not issue.get('pull_request', {}).get('url'):
             continue
 
         label_names = [label["name"] for label in issue["labels"]]
