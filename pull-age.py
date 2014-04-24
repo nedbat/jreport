@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
-import sys
 import argparse
 import itertools
+import sys
+import yaml
+
 from datetime import date, datetime, timedelta
 from backports import statistics
 
@@ -19,26 +21,19 @@ REPOS = (
     ("edx", "edx-platform", "open-source-contribution"),
     ("edx", "configuration", "open-source-contribution"),
 )
-INTERNAL_TEAMS = ("developers", "contractors")
 
 
 def get_internal_usernames():
     """
-    Returns a set of the Github usernames that are in at least one of the
-    internal teams at edX.
+    Returns a set of the Github usernames that are associated with edX.
     """
+    with open("mapping.yaml") as mapping_yaml:
+        mapping = yaml.load(mapping_yaml)
+
     internal_usernames = set()
-    teams_url = "https://api.github.com/orgs/edx/teams"
-    members_urls = {team["name"]: team["members_url"].replace("{/member}", "")
-                    for team in paginated_get(teams_url)}
-    for team in INTERNAL_TEAMS:
-        if team not in members_urls:
-            print("Warning: {team} not present on Github".format(team=team),
-                  file=sys.stderr)
-            continue
-        members = paginated_get(members_urls[team])
-        for member in members:
-            internal_usernames.add(member["login"])
+    for github_name, info in mapping.iteritems():
+        if info.get("institution", "unknown") == "edX":
+            internal_usernames.add(github_name)
     return internal_usernames
 
 
