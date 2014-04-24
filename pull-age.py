@@ -85,7 +85,7 @@ def get_duration_data(owner="edx", repo="edx-platform", since=None,
     )
 
     for issue, state in itertools.chain(open_issues_generator, closed_issues_generator):
-        if not issue['pull_request']['url']:
+        if not issue.get('pull_request', {}).get('url'):
             continue
 
         label_names = [label["name"] for label in issue["labels"]]
@@ -150,8 +150,12 @@ def main(argv):
     for state in ("open", "closed"):
         for position in ("external", "internal"):
             seconds = [d.total_seconds() for d in durations[state][position]]
-            median_seconds = int(statistics.median(seconds))
-            median_duration = timedelta(seconds=median_seconds)
+            if seconds:
+                median_seconds = int(statistics.median(seconds))
+                median_duration = timedelta(seconds=median_seconds)
+            else:
+                median_seconds = -1
+                median_duration = "no data"
             population = "all"
             if state == "closed" and since:
                 population = "since {date}".format(date=since)
