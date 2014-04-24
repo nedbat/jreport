@@ -142,8 +142,9 @@ def main(argv):
             for position in ("external", "internal"):
                 durations[state][position].extend(repo_durations[state][position])
 
-    for state in ("open", "closed"):
-        for position in ("external", "internal"):
+    ss_friendly = ""
+    for position in ("external", "internal"):
+        for state in ("open", "closed"):
             seconds = [d.total_seconds() for d in durations[state][position]]
             if seconds:
                 median_seconds = int(statistics.median(seconds))
@@ -160,9 +161,11 @@ def main(argv):
                     duration=median_duration
                 ))
             else:
-                print("median {position} {state} {seconds}".format(
-                    position=position, state=state, seconds=median_seconds
-                ))
+                ss_friendly += ",{},{}".format(len(seconds), median_seconds)
+
+    if ss_friendly:
+        print("when,repos,eopen,eopenage,eclosed,eclosedage,iopen,iopenage,iclosed,iclosedage")
+        print("{:%m/%d/%Y},{}{}".format(date.today(), len(REPOS), ss_friendly))
 
 if __name__ == "__main__":
     main(sys.argv)
