@@ -19,7 +19,7 @@ DEBUG = False
 REPOS = (
     # owner, repo, label to indicate external contribution
     ("edx", "edx-platform", "open-source-contribution"),
-    ("edx", "configuration", "open-source-contribution"),
+    #("edx", "configuration", "open-source-contribution"),
 )
 
 
