@@ -99,6 +99,8 @@ class Formattable(object):
                     v = ago(v)
                 elif spec == "oneline":
                     v = " ".join(v.split())
+                elif spec == "pad":
+                    v = " " + v + " "
                 else:
                     raise Exception("Don't know formatting {!r}".format(spec))
         return v

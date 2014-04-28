@@ -14,7 +14,14 @@ import requests
 import jreport
 from jreport.util import paginated_get
 
-ISSUE_FMT = "{number:5d:white:bold} {user.login:>17s:cyan} {comments:3d:red}  {title:.100s} {pull.commits}c{pull.changed_files}f {pull.additions:green}+{pull.deletions:red}- {state:white:negative} {updated_at:ago:white} {created_at:%b %d:yellow}"
+ISSUE_FMT = (
+    "{number:5d:white:bold} {user.login:>17s:cyan} {comments:3d:red}"
+    "  {title:.100s}"
+    " {pull.commits}c{pull.changed_files}f"
+    " {pull.additions:green}+{pull.deletions:red}-"
+    " {combinedstate:pad:{combinedstatecolor}:negative}"
+    " {updated_at:ago:white} {created_at:%b %d:yellow}"
+)
 COMMENT_FMT = "{:31}{user.login:cyan} {created_at:%b %d:yellow}  \t{body:oneline:.100s:white}"
 
 
@@ -59,6 +66,17 @@ def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None,
             # new category! print category header
             category = issue["org"]
             print("-- {category} ----".format(category=category))
+
+        if issue['state'] == 'open':
+            issue['combinedstate'] = 'open'
+            issue['combinedstatecolor'] = 'green'
+        elif issue['pull.merged']:
+            issue['combinedstate'] = 'merged'
+            issue['combinedstatecolor'] = 'blue'
+        else:
+            issue['combinedstate'] = 'closed'
+            issue['combinedstatecolor'] = 'red'
+
         print(issue.format(ISSUE_FMT))
         if show_comments:
             comments_url = URLObject(issue['comments_url'])
