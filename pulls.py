@@ -7,9 +7,10 @@ import more_itertools
 import operator
 import sys
 
+from pymongo import MongoClient
+import requests
 from urlobject import URLObject
 import yaml
-import requests
 
 import jreport
 from jreport.util import paginated_get
@@ -25,9 +26,38 @@ ISSUE_FMT = (
 COMMENT_FMT = "{:31}{user.login:cyan} {created_at:%b %d:yellow}  \t{body:oneline:.100s:white}"
 
 
-def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None, org=False):
-    labels = labels or []
+class JPullRequest(jreport.JObj):
+    def __init__(self, issue_data, org_fn=None):
+        super(JPullRequest, self).__init__(issue_data)
+        if org_fn:
+            self['org'] = org_fn(self)
 
+    def finish_loading(self):
+        self['pull'] = requests.get(self._pr_url).json()
+
+        if self['state'] == 'open':
+            self['combinedstate'] = 'open'
+            self['combinedstatecolor'] = 'green'
+        elif self['pull.merged']:
+            self['combinedstate'] = 'merged'
+            self['combinedstatecolor'] = 'blue'
+        else:
+            self['combinedstate'] = 'closed'
+            self['combinedstatecolor'] = 'red'
+
+    @classmethod
+    def from_json(cls, issues_data, org_fn=None):
+        for issue_data in issues_data:
+            issue = cls(issue_data, org_fn)
+            pr_url = issue.get('pull_request', {}).get('url')
+            if not pr_url:
+                continue
+            issue._pr_url = pr_url
+
+            yield issue
+
+
+def get_pulls(labels=None, state="open", since=None, org=False):
     url = URLObject("https://api.github.com/repos/edx/edx-platform/issues")
     if labels:
         url = url.set_query_param('labels', ",".join(labels))
@@ -37,47 +67,42 @@ def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None,
         url = url.set_query_param('state', state)
     url = url.set_query_param('sort', 'updated')
 
-    try:
-        with open("mapping.yaml") as fmapping:
-            user_mapping = yaml.load(fmapping)
-        def_org = "other"
-    except IOError:
-        user_mapping = {}
-        def_org = "---"
-
-    issues = (jreport.JObj(issue) for issue in paginated_get(url))
+    org_fn = None
     if org:
-        # exhaust the generator
-        issues = list(issues)
-        # look up each user's organization
-        for issue in issues:
-            issue['org'] = user_mapping.get(issue["user.login"], {}).get("institution", def_org)
-        # re-sort issues based on user organizations
+        try:
+            with open("mapping.yaml") as fmapping:
+                user_mapping = yaml.load(fmapping)
+            def_org = "other"
+        except IOError:
+            user_mapping = {}
+            def_org = "---"
+
+        def org_fn(issue):
+            return user_mapping.get(issue["user.login"], {}).get("institution", def_org)
+
+    issues = JPullRequest.from_json(paginated_get(url), org_fn)
+    if org:
         issues = sorted(issues, key=operator.itemgetter("org"))
+
+    return issues
+
+
+def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None, org=False):
+    issues = get_pulls(labels, state, since, org)
 
     category = None
     for index, issue in enumerate(issues):
-        pr_url = issue.get('pull_request', {}).get('url')
-        if not pr_url:
-            # We only want pull requests.
-            continue
-        issue['pull'] = requests.get(pr_url).json()
+        issue.finish_loading()
         if issue.get("org") != category:
             # new category! print category header
             category = issue["org"]
             print("-- {category} ----".format(category=category))
 
-        if issue['state'] == 'open':
-            issue['combinedstate'] = 'open'
-            issue['combinedstatecolor'] = 'green'
-        elif issue['pull.merged']:
-            issue['combinedstate'] = 'merged'
-            issue['combinedstatecolor'] = 'blue'
-        else:
-            issue['combinedstate'] = 'closed'
-            issue['combinedstatecolor'] = 'red'
-
+        if 0:
+            import pprint
+            pprint.pprint(issue.obj)
         print(issue.format(ISSUE_FMT))
+
         if show_comments:
             comments_url = URLObject(issue['comments_url'])
             comments_url = comments_url.set_query_param("sort", "created")
@@ -90,6 +115,23 @@ def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None,
     # index is now set to the total number of pull requests
     print()
     print("{num} pull requests".format(num=index))
+
+
+if 0:
+    """
+    db.prs.find({  created_at: {   $gte: "2014-01-01T00:00:00.000Z",   $lt: "2014-04-01T00:00:00.000Z"  } }).count()
+    db.prs.find({  created_at: {   $gte: "2014-04-01T00:00:00.000Z",   $lt: "2014-07-01T00:00:00.000Z"  } }).count()
+    db.prs.find({ "pull.merged": true, "pull.merged_at": {   $gte: "2014-04-01T00:00:00.000Z",   $lt: "2014-07-01T00:00:00.000Z"  } }).count()
+    db.prs.find({ "pull.merged": true, "pull.merged_at": {   $gte: "2014-01-01T00:00:00.000Z",   $lt: "2014-04-01T00:00:00.000Z"  } }).count()
+    """
+
+    def insert_pulls(labels=None, state="open", since=None, org=False):
+        mongo_client = MongoClient()
+        mongo_collection = mongo_client.prs.prs
+
+        issues = get_pulls(labels, state, since, org)
+        for issue in issues:
+            mongo_collection.insert(issue)
 
 
 def main(argv):
