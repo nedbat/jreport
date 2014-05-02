@@ -2,11 +2,13 @@
 from __future__ import print_function
 
 import argparse
+import collections
 import datetime
 import more_itertools
 import operator
 import sys
 
+import dateutil.parser
 from pymongo import MongoClient
 import requests
 from urlobject import URLObject
@@ -133,6 +135,23 @@ if 0:
         for issue in issues:
             mongo_collection.insert(issue)
 
+
+if 0:
+    def yearmonth(d):
+        return dateutil.parser.parse(d).strftime("%Y%m")
+
+    def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None, org=False):
+        months = collections.defaultdict(lambda: {'opened': 0, 'merged': 0})
+        issues = get_pulls(labels, state, since, org)
+        for issue in issues:
+            issue.finish_loading()
+            months[yearmonth(issue['created_at'])]['opened'] += 1
+            if issue['pull.merged']:
+                months[yearmonth(issue['pull.merged_at'])]['merged'] += 1
+
+        print(months)
+        for ym, data in sorted(months.items()):
+            print("{ym},{data[opened]},{data[merged]}".format(ym=ym, data=data))
 
 def main(argv):
     parser = argparse.ArgumentParser(description="Summarize pull requests.")
