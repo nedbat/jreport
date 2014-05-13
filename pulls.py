@@ -24,6 +24,7 @@ ISSUE_FMT = (
     " {pull.additions:green}+{pull.deletions:red}-"
     " {combinedstate:pad:{combinedstatecolor}:negative}"
     " {updated_at:ago:white} {created_at:%b %d:yellow}"
+    " {labels:spacejoin:pad:yellow:negative}"
 )
 COMMENT_FMT = "{:31}{user.login:cyan} {created_at:%b %d:yellow}  \t{body:oneline:.100s:white}"
 
@@ -46,6 +47,15 @@ class JPullRequest(jreport.JObj):
         else:
             self['combinedstate'] = 'closed'
             self['combinedstatecolor'] = 'red'
+
+        self['labels'] = [self.short_label(l['name']) for l in self['labels']]
+
+    def short_label(self, lname):
+        if lname == "open-source-contribution":
+            return "osc"
+        if lname.startswith("waiting on "):
+            return lname[len("waiting on "):]
+        return lname
 
     @classmethod
     def from_json(cls, issues_data, org_fn=None):
@@ -116,7 +126,7 @@ def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None,
 
     # index is now set to the total number of pull requests
     print()
-    print("{num} pull requests".format(num=index))
+    print("{num} pull requests".format(num=index+1))
 
 
 if 0:
@@ -152,6 +162,31 @@ if 0:
         print(months)
         for ym, data in sorted(months.items()):
             print("{ym},{data[opened]},{data[merged]}".format(ym=ym, data=data))
+
+if 0:
+    # The wall of shame
+    def show_pulls(jrep, labels=None, show_comments=False, state="open", since=None, org=False):
+        issues = get_pulls(state="open")
+        blocked_by = collections.defaultdict(list)
+        for issue in issues:
+            issue.finish_loading()
+            for label in issue['labels']:
+                if label == "osc":
+                    continue
+                blocked_by[label].append(issue)
+
+        shame = sorted(blocked_by.items(), key=lambda li: len(li[1]), reverse=True)
+        print("team,external,internal,extlines,intlines")
+        for label, issues in shame:
+            internal, external = [0, 0], [0, 0]
+            for iss in issues:
+                lines = iss['pull.additions'] + iss['pull.deletions']
+                stats = external if "osc" in iss['labels'] else internal
+                stats[0] += 1
+                stats[1] += lines
+            print("{},{},{},{},{}".format(
+                label, external[0], internal[0], external[1], internal[1]
+            ))
 
 def main(argv):
     parser = argparse.ArgumentParser(description="Summarize pull requests.")

@@ -101,6 +101,8 @@ class Formattable(object):
                     v = " ".join(v.split())
                 elif spec == "pad":
                     v = " " + v + " "
+                elif spec == "spacejoin":
+                    v = " ".join(v)
                 else:
                     raise Exception("Don't know formatting {!r}".format(spec))
         return v
