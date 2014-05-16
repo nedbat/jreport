@@ -184,7 +184,7 @@ if 0:
                 stats = external if "osc" in iss['labels'] else internal
                 stats[0] += 1
                 stats[1] += lines
-            print("{},{},{},{},{}".format(
+            print("{}\t{}\t{}\t{}\t{}".format(
                 label, external[0], internal[0], external[1], internal[1]
             ))
 
