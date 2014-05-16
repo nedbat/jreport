@@ -37,16 +37,18 @@ def get_internal_usernames():
     return internal_usernames
 
 
-def get_duration_data(owner="edx", repo="edx-platform", since=None,
+def get_duration_data(durations, owner="edx", repo="edx-platform", since=None,
                       external_label="open-source-contribution", internal_usernames=None):
     """
-    Return four lists of data, where each list contains only timedelta objects:
+    Update `durations`, a dict of dict of lists of pull requests.
+
+    `durations` has four lists of data, where each list contains only timedelta objects:
       age of internal open pull requests (all)
       age of external open pull requests (all)
       age of internal closed pull requests (since the `since` value)
       age of external closed pull requests (since the `since` value)
 
-    These lists are organized into an object that categorizes the lists
+    These lists are organized into a dictionary that categorizes the lists
     by position and state.
     """
     internal_usernames = internal_usernames or set()
@@ -58,17 +60,6 @@ def get_duration_data(owner="edx", repo="edx-platform", since=None,
     closed_url = url.set_query_param("state", "closed")
     if since:
         closed_url = closed_url.set_query_param('since', since.isoformat())
-
-    durations = {
-        "open": {
-            "internal": [],
-            "external": [],
-        },
-        "closed": {
-            "internal": [],
-            "external": [],
-        }
-    }
 
     open_issues_generator = itertools.izip(
         paginated_get(open_url),
@@ -98,16 +89,14 @@ def get_duration_data(owner="edx", repo="edx-platform", since=None,
             closed_at = datetime.utcnow()
         else:
             closed_at = iso8601.parse_date(issue["closed_at"]).replace(tzinfo=None)
-        duration = closed_at - created_at
+        issue['duration'] = closed_at - created_at
         if DEBUG:
             print("{owner}/{repo}#{num}: {position} {state}".format(
                 owner=owner, repo=repo, num=issue["number"],
                 position=position, state=state
             ), file=sys.stderr)
 
-        durations[state][position].append(duration)
-
-    return durations
+        durations[state][position].append(issue)
 
 
 def main(argv):
@@ -137,15 +126,12 @@ def main(argv):
         }
     }
     for owner, repo, label in REPOS:
-        repo_durations = get_duration_data(owner, repo, since, label, internal_usernames)
-        for state in ("open", "closed"):
-            for position in ("external", "internal"):
-                durations[state][position].extend(repo_durations[state][position])
+        get_duration_data(durations, owner, repo, since, label, internal_usernames)
 
     ss_friendly = []
     for position in ("external", "internal"):
         for state in ("open", "closed"):
-            seconds = [d.total_seconds() for d in durations[state][position]]
+            seconds = [p['duration'].total_seconds() for p in durations[state][position]]
             if seconds:
                 median_seconds = int(statistics.median(seconds))
                 median_duration = timedelta(seconds=median_seconds)
